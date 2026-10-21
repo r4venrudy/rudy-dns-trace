@@ -46,8 +46,10 @@ static void set_error(char *error, size_t error_size, const char *format, ...) {
 }
 
 static uint16_t read_u16(const uint8_t *p, int little) {
-    return little ? (uint16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8U))
-                  : (uint16_t)(((uint16_t)p[0] << 8U) | (uint16_t)p[1]);
+    uint32_t value;
+    if (little) value = (uint32_t)p[0] | ((uint32_t)p[1] << 8U);
+    else value = ((uint32_t)p[0] << 8U) | (uint32_t)p[1];
+    return (uint16_t)value;
 }
 
 static uint32_t read_u32(const uint8_t *p, int little) {
@@ -383,7 +385,7 @@ static rdt_transaction *append_transaction(rdt_report *report) {
 
 static void record_dns(rdt_report *report, const rdt_dns_message *dns,
                        const char *source, const char *destination, uint16_t source_port,
-                       uint16_t destination_port, double timestamp, char *error,
+                       double timestamp, char *error,
                        size_t error_size) {
     const char *client = source_port == 53U ? destination : source;
     const char *resolver = source_port == 53U ? source : destination;
@@ -461,7 +463,7 @@ static int parse_dns_packet(rdt_report *report, const uint8_t *payload, size_t l
         ++report->malformed_dns;
         return 1;
     }
-    record_dns(report, &dns, src, dst, src_port, dst_port, timestamp, error, error_size);
+    record_dns(report, &dns, src, dst, src_port, timestamp, error, error_size);
     return error == NULL || error[0] == '\0';
 }
 
@@ -733,7 +735,7 @@ static int is_section_header(const uint8_t *header) {
 
 static int parse_pcapng(FILE *file, const uint8_t first_magic[4], rdt_report *report,
                         char *error, size_t error_size) {
-    uint8_t header[8];
+    uint8_t header[12];
     rdt_interface interfaces[RDT_MAX_INTERFACES];
     size_t interface_count = 0U;
     int little = 0;

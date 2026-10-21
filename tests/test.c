@@ -154,7 +154,7 @@ static int write_pcapng(const char *path, const uint8_t *query, size_t query_len
 }
 
 static int test_classic_and_outputs(void) {
-    uint8_t query_dns[128], answer_dns[128], query_frame[256], retry_frame[256], answer_frame[256];
+    uint8_t query_dns[128], answer_dns[128], query_frame[512], retry_frame[512], answer_frame[512];
     size_t qn = make_dns(query_dns, 0, 0, 0);
     size_t an = make_dns(answer_dns, 1, 1, 0);
     size_t qf = make_ipv4_frame(query_frame, query_dns, qn, 0, 0);
@@ -195,7 +195,7 @@ static int test_classic_and_outputs(void) {
 }
 
 static int test_pcapng(void) {
-    uint8_t qdns[128], adns[128], qframe[256], aframe[256];
+    uint8_t qdns[128], adns[128], qframe[512], aframe[512];
     size_t qn = make_dns(qdns, 0, 0, 0), an = make_dns(adns, 1, 0, 0);
     size_t qf = make_ipv4_frame(qframe, qdns, qn, 0, 0), af = make_ipv4_frame(aframe, adns, an, 1, 0);
     rdt_report report;
@@ -211,7 +211,7 @@ static int test_pcapng(void) {
 }
 
 static int test_ipv6_and_malformed_dns(void) {
-    uint8_t dns[128], raw[256], malformed[128], frame[256];
+    uint8_t dns[128], raw[256], malformed[128], frame[512];
     size_t dns_length = make_dns(dns, 0, 0, 0);
     size_t raw_length = make_ipv6_raw(raw, dns, dns_length);
     uint32_t seconds[1] = {1U}, fractions[1] = {0U};
@@ -239,7 +239,7 @@ static int test_ipv6_and_malformed_dns(void) {
 }
 
 static int test_parallel_transaction_correlation(void) {
-    uint8_t packets_storage[6][256];
+    uint8_t packets_storage[6][512];
     uint8_t dns[128];
     const uint8_t *packets[6];
     size_t lengths[6];
