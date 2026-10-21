@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="300" viewBox="0 0 1200 300" role="img" aria-labelledby="title desc">
+  <title id="title">RUDY DNS TRACE</title>
+  <desc id="desc">Offline DNS packet-capture analysis in C.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#101820"/><stop offset="1" stop-color="#071019"/></linearGradient>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M32 0H0V32" fill="none" stroke="#1d2b37" stroke-width="1"/></pattern>
+  </defs>
+  <rect width="1200" height="300" rx="24" fill="url(#bg)"/>
+  <rect width="1200" height="300" rx="24" fill="url(#grid)" opacity=".62"/>
+  <rect x="0" y="0" width="8" height="300" rx="4" fill="#55e0b6"/>
+  <text x="64" y="70" fill="#55e0b6" font-family="monospace" font-size="16" letter-spacing="5">RUDY SYSTEMS / NETWORK FORENSICS</text>
+  <text x="64" y="154" fill="#eef4f7" font-family="Arial, sans-serif" font-size="58" font-weight="700">Rudy DNS Trace</text>
+  <text x="64" y="204" fill="#9db4c6" font-family="Arial, sans-serif" font-size="24">Read saved DNS traffic. Find the retries, gaps, and answers.</text>
+  <path d="M830 62h292v54H830zM830 130h292v54H830zM830 198h292v54H830z" fill="#101e29" stroke="#294050" stroke-width="2"/>
+  <path d="M853 89h34m12 0h79m12 0h100M853 157h58m12 0h55m12 0h100M853 225h33m12 0h97m12 0h100" stroke="#55e0b6" stroke-width="4" stroke-linecap="round"/>
+  <text x="64" y="264" fill="#55e0b6" font-family="monospace" font-size="15" letter-spacing="2">C11 · PCAP / PCAPNG · OFFLINE · PRIVACY-AWARE</text>
+</svg>
