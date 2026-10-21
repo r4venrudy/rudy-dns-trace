@@ -189,6 +189,8 @@ static int test_classic_and_outputs(void) {
     text[read_count] = '\0';
     CHECK(strstr(text, "\"client\":\"<redacted>\"") != NULL, "JSON report redacts addresses");
     CHECK(strstr(text, "\"name\":\"<redacted>\"") != NULL, "JSON report redacts names");
+    CHECK(strstr(text, "\"status\":\"response\"") != NULL, "JSON report labels matched replies");
+    CHECK(strstr(text, "\"unanswered\": 0") != NULL, "JSON summary describes capture evidence without claiming a timeout");
     fclose(out);
     rdt_report_free(&report);
     return 1;

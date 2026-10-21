@@ -700,7 +700,7 @@ static int parse_options(const uint8_t *block, size_t begin, size_t end, int lit
         size_t padded = ((size_t)length + 3U) & ~(size_t)3U;
         offset += 4U;
         if (padded > end - offset) return 0;
-        if (code == 0U) return length == 0U;
+        if (code == 0U) return length == 0U && offset == end;
         if (code == 9U && length == 1U && ticks_per_second != NULL) {
             uint8_t resolution = block[offset];
             unsigned exponent = (unsigned)(resolution & 0x7fU);
@@ -928,7 +928,7 @@ static void write_json(FILE *out, const rdt_report *report, int redact_ips,
         else ++timeouts;
     }
     fputs("{\n  \"schema\": \"rudy-dns-trace/v1\",\n  \"summary\": {", out);
-    (void)fprintf(out, "\n    \"packets\": %llu,\n    \"dnsMessages\": %llu,\n    \"queries\": %llu,\n    \"responses\": %llu,\n    \"transactions\": %llu,\n    \"answered\": %llu,\n    \"timeouts\": %llu,\n    \"retransmissions\": %llu,\n    \"unmatchedResponses\": %llu,\n    \"malformedPackets\": %llu,\n    \"malformedDns\": %llu,\n    \"truncatedPackets\": %llu,\n    \"skippedFragments\": %llu,\n    \"tcpDnsSkipped\": %llu,\n    \"unsupportedLinkPackets\": %llu,\n    \"meanLatencyMs\": %.3f\n  },\n  \"transactions\": [\n",
+    (void)fprintf(out, "\n    \"packets\": %llu,\n    \"dnsMessages\": %llu,\n    \"queries\": %llu,\n    \"responses\": %llu,\n    \"transactions\": %llu,\n    \"answered\": %llu,\n    \"unanswered\": %llu,\n    \"retransmissions\": %llu,\n    \"unmatchedResponses\": %llu,\n    \"malformedPackets\": %llu,\n    \"malformedDns\": %llu,\n    \"truncatedPackets\": %llu,\n    \"skippedFragments\": %llu,\n    \"tcpDnsSkipped\": %llu,\n    \"unsupportedLinkPackets\": %llu,\n    \"meanLatencyMs\": %.3f\n  },\n  \"transactions\": [\n",
                    (unsigned long long)report->packets, (unsigned long long)report->dns_messages,
                    (unsigned long long)report->queries, (unsigned long long)report->responses,
                    (unsigned long long)report->transaction_count, (unsigned long long)answered,
@@ -945,7 +945,7 @@ static void write_json(FILE *out, const rdt_report *report, int redact_ips,
         fputs(",\"resolver\":", out); json_string(out, redact_ips ? "<redacted>" : tx->resolver);
         fputs(",\"name\":", out); json_string(out, redact_names ? "<redacted>" : tx->qname);
         fputs(",\"type\":", out); json_string(out, tx->qtype);
-        fputs(",\"status\":", out); json_string(out, tx->has_response ? "response" : "timeout");
+        fputs(",\"status\":", out); json_string(out, tx->has_response ? "response" : "unanswered");
         fputs(",\"rcode\":", out); json_string(out, tx->has_response ? rcode_name(tx->rcode) : "-");
         (void)fprintf(out, ",\"id\":%u,\"queries\":%u,\"answers\":%u,\"latencyMs\":%.3f,\"truncated\":%s}",
                       (unsigned)tx->id, tx->query_count, tx->answer_count, tx->latency_ms,
@@ -980,7 +980,7 @@ static void write_csv(FILE *out, const rdt_report *report, int redact_ips,
         csv_field(out, redact_ips ? "<redacted>" : tx->resolver); fputc(',', out);
         csv_field(out, redact_names ? "<redacted>" : tx->qname); fputc(',', out);
         csv_field(out, tx->qtype); fputc(',', out);
-        csv_field(out, tx->has_response ? "response" : "timeout"); fputc(',', out);
+        csv_field(out, tx->has_response ? "response" : "unanswered"); fputc(',', out);
         csv_field(out, tx->has_response ? rcode_name(tx->rcode) : "-");
         (void)fprintf(out, ",%u,%u,%u,%.3f,%s\n", (unsigned)tx->id, tx->query_count,
                       tx->answer_count, tx->latency_ms, tx->truncated_response ? "true" : "false");
@@ -1013,7 +1013,7 @@ static void write_text(FILE *out, const rdt_report *report, int redact_ips,
         (void)fprintf(out, "%-18s %-18s %-8s %-9s %7.3f %-5s %s\n",
                       redact_ips ? "<redacted>" : tx->client,
                       redact_ips ? "<redacted>" : tx->resolver,
-                      tx->has_response ? "response" : "timeout",
+                      tx->has_response ? "response" : "unanswered",
                       tx->has_response ? rcode_name(tx->rcode) : "-",
                       tx->latency_ms, tx->qtype,
                       redact_names ? "<redacted>" : tx->qname);

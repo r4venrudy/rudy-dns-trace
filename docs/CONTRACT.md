@@ -5,7 +5,7 @@ Rudy DNS Trace reads an offline PCAP or PCAPNG file and writes a summary plus a 
 ## Supported capture records
 
 - Classic PCAP 2.x, little- or big-endian, microsecond or nanosecond timestamps.
-- PCAPNG section, interface, enhanced-packet, and simple-packet blocks; interface timestamp resolution and offset are honored.
+- PCAPNG section, interface, enhanced-packet, and simple-packet blocks; interface timestamp resolution and offset are honored. Simple-packet blocks have no timestamp, so their reported latency is zero and is not a timing measurement.
 - Ethernet with up to four VLAN tags, Linux cooked capture v1/v2, raw IPv4/IPv6, and BSD null/loopback.
 - IPv4 and IPv6 UDP packets carrying port 53 DNS. IPv6 hop-by-hop, routing, destination-options, and authentication extension headers are bounded and parsed.
 - DNS over TCP only when a complete length-prefixed DNS message appears in one captured packet.
@@ -14,7 +14,7 @@ Unknown link types, unsupported IP protocols, encrypted DNS, fragmented IP packe
 
 ## Correlation
 
-Transactions are matched on the DNS identifier, client and resolver addresses, and the first question name/type. A repeated matching query before a response increments its retry count. A response with no question may match by identifier and endpoint pair. If a capture begins after a query or omits packets, a response can be reported as unmatched and an unanswered query can be a capture artifact rather than a network failure.
+Transactions are matched on the DNS identifier, client and resolver addresses, and the first question name/type. A repeated matching query before a response increments its retry count. A response with no question may match by identifier and endpoint pair. If a capture begins after a query or omits packets, a response can be reported as unmatched and an unanswered query can be a capture artifact rather than a network failure. An unanswered status means only that this file contains no matching reply.
 
 The tool reports the answer-section record count but does not interpret arbitrary DNS resource-record data. Its output is a packet-capture summary, not a DNSSEC validation result, resolver health verdict, or proof of malicious behavior.
 
