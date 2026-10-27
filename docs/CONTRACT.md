@@ -14,7 +14,7 @@ Unknown link types, unsupported IP protocols, encrypted DNS, fragmented IP packe
 
 ## Correlation
 
-Transactions are matched on the DNS identifier, client and resolver addresses, and the first question name/type. A repeated matching query before a response increments its retry count. A response with no question may match by identifier and endpoint pair. If a capture begins after a query or omits packets, a response can be reported as unmatched and an unanswered query can be a capture artifact rather than a network failure. An unanswered status means only that this file contains no matching reply.
+Transactions are matched on the DNS identifier, client and resolver addresses and ports, transport, and the first question name/type/class. A repeated matching query before a response increments its retry count. A response with no question may match by identifier, endpoint addresses and ports, and transport. If a capture begins after a query or omits packets, a response can be reported as unmatched and an unanswered query can be a capture artifact rather than a network failure. An unanswered status means only that this file contains no matching reply.
 
 The tool reports the answer-section record count but does not interpret arbitrary DNS resource-record data. Its output is a packet-capture summary, not a DNSSEC validation result, resolver health verdict, or proof of malicious behavior.
 

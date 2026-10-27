@@ -16,6 +16,7 @@ typedef struct {
     char qtype[24];
     uint16_t client_port;
     uint16_t resolver_port;
+    uint16_t qclass;
     int tcp;
     uint16_t id;
     uint32_t query_count;

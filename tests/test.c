@@ -331,6 +331,34 @@ static int test_flow_correlation(void) {
     return 1;
 }
 
+static int test_question_class_correlation(void) {
+    uint8_t storage[4][512], dns[128];
+    const uint8_t *packets[4];
+    size_t lengths[4], i;
+    uint32_t seconds[4] = {1U, 1U, 1U, 1U};
+    uint32_t fractions[4] = {0U, 1000U, 20000U, 31000U};
+    rdt_report report;
+    char error[256] = {0};
+    for (i = 0U; i < 4U; ++i) {
+        int response = i >= 2U;
+        size_t n = make_dns(dns, response, 0, 0);
+        dns[n - 1U] = i % 2U == 0U ? 1U : 3U; /* IN versus CH */
+        lengths[i] = make_ipv4_frame(storage[i], dns, n, response, 0);
+        packets[i] = storage[i];
+    }
+    CHECK(write_classic("rdt-test-classes.pcap", 1U, packets, lengths, seconds, fractions, 4U),
+          "write questions with different DNS classes");
+    rdt_report_init(&report);
+    CHECK(rdt_analyze_file("rdt-test-classes.pcap", &report, error, sizeof(error)), error);
+    CHECK(report.transaction_count == 2U && report.retransmissions == 0U && report.unmatched_responses == 0U,
+          "question class distinguishes simultaneous DNS transactions");
+    CHECK(fabs(report.transactions[0].latency_ms - 20.0) < 0.01 &&
+          fabs(report.transactions[1].latency_ms - 30.0) < 0.01,
+          "responses match the correct question class");
+    rdt_report_free(&report);
+    return 1;
+}
+
 static int test_csv_formula_names(void) {
     const char prefixes[] = "=+-@";
     size_t i;
@@ -395,7 +423,8 @@ static int test_truncated_capture(void) {
 int main(void) {
     if (!test_classic_and_outputs() || !test_pcapng() ||
         !test_ipv6_and_malformed_dns() || !test_parallel_transaction_correlation() ||
-        !test_flow_correlation() || !test_csv_formula_names() || !test_truncated_capture()) return 1;
+        !test_flow_correlation() || !test_question_class_correlation() ||
+        !test_csv_formula_names() || !test_truncated_capture()) return 1;
     (void)printf("Rudy DNS Trace: %u checks passed\n", checks);
     return 0;
 }

@@ -84,7 +84,7 @@ Reports contain client/resolver addresses and queried names by default. Apply bo
 
 CSV exports render a DNS name's leading `=`, `+`, `-`, or `@` byte as literal `\xNN` text so spreadsheet applications do not interpret captured names as formulas. JSON retains the decoded name for programmatic analysis.
 
-Transaction correlation includes client/resolver addresses and ports, transport, DNS ID, and question. JSON exposes `clientPort`, `resolverPort`, and `transport`; CSV appends `client_port`, `resolver_port`, and `transport` columns. Separate sockets that reuse a DNS ID stay separate, including UDP and TCP traffic for the same question.
+Transaction correlation includes client/resolver addresses and ports, transport, DNS ID, and question name/type/class. JSON exposes `clientPort`, `resolverPort`, `transport`, and the numeric DNS `class`; CSV appends `client_port`, `resolver_port`, `transport`, and `class` columns. Separate sockets that reuse a DNS ID stay separate, including UDP and TCP traffic for the same question.
 
 ## Project notes
 
