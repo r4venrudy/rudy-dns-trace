@@ -82,6 +82,8 @@ It does not reassemble TCP streams, IP fragments, or DNS messages split across p
 
 Reports contain client/resolver addresses and queried names by default. Apply both redaction flags before sharing if those fields are sensitive. Redaction affects report output; it does not alter or sanitize the original capture.
 
+CSV exports render a DNS name's leading `=`, `+`, `-`, or `@` byte as literal `\xNN` text so spreadsheet applications do not interpret captured names as formulas. JSON retains the decoded name for programmatic analysis.
+
 ## Project notes
 
 - [Security policy](SECURITY.md)

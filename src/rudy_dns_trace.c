@@ -969,6 +969,18 @@ static void csv_field(FILE *out, const char *value) {
     fputc('"', out);
 }
 
+static void csv_name(FILE *out, const char *value) {
+    if (value[0] != '\0' && strchr("=+-@", value[0]) != NULL) {
+        char escaped[RDT_NAME_MAX + 4U];
+        /* Quoting alone does not stop spreadsheet formula interpretation. Use
+           the DNS display's literal hex notation, preserving JSON evidence. */
+        (void)snprintf(escaped, sizeof(escaped), "\\x%02x%s", (unsigned char)value[0], value + 1);
+        csv_field(out, escaped);
+    } else {
+        csv_field(out, value);
+    }
+}
+
 static void write_csv(FILE *out, const rdt_report *report, int redact_ips,
                       int redact_names, size_t max_results) {
     size_t i;
@@ -978,7 +990,7 @@ static void write_csv(FILE *out, const rdt_report *report, int redact_ips,
         const rdt_transaction *tx = &report->transactions[i];
         csv_field(out, redact_ips ? "<redacted>" : tx->client); fputc(',', out);
         csv_field(out, redact_ips ? "<redacted>" : tx->resolver); fputc(',', out);
-        csv_field(out, redact_names ? "<redacted>" : tx->qname); fputc(',', out);
+        csv_name(out, redact_names ? "<redacted>" : tx->qname); fputc(',', out);
         csv_field(out, tx->qtype); fputc(',', out);
         csv_field(out, tx->has_response ? "response" : "unanswered"); fputc(',', out);
         csv_field(out, tx->has_response ? rcode_name(tx->rcode) : "-");

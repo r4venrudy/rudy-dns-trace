@@ -280,6 +280,49 @@ static int test_parallel_transaction_correlation(void) {
     return 1;
 }
 
+static int test_csv_formula_names(void) {
+    const char prefixes[] = "=+-@";
+    size_t i;
+    for (i = 0U; i < sizeof(prefixes) - 1U; ++i) {
+        uint8_t dns[128], frame[512];
+        size_t dns_length = make_dns(dns, 0, 0, 0);
+        const uint8_t *packets[1] = {frame};
+        size_t lengths[1];
+        uint32_t seconds[1] = {1U}, fractions[1] = {0U};
+        rdt_report report;
+        char error[256] = {0}, text[4096], expected[80];
+        size_t read_count;
+        FILE *out;
+        dns[13] = (uint8_t)prefixes[i];
+        lengths[0] = make_ipv4_frame(frame, dns, dns_length, 0, 0);
+        CHECK(write_classic("rdt-test-formula.pcap", 1U, packets, lengths, seconds, fractions, 1U),
+              "write formula-prefixed DNS fixture");
+        rdt_report_init(&report);
+        CHECK(rdt_analyze_file("rdt-test-formula.pcap", &report, error, sizeof(error)), error);
+        CHECK(report.transaction_count == 1U, "formula-like DNS label remains valid evidence");
+        out = tmpfile();
+        CHECK(out != NULL, "open CSV report");
+        rdt_write_report(out, &report, "csv", 0, 0, 0U);
+        rewind(out);
+        read_count = fread(text, 1U, sizeof(text) - 1U, out);
+        text[read_count] = '\0';
+        fclose(out);
+        (void)snprintf(expected, sizeof(expected), ",\"\\x%02xxample.com\",", (unsigned char)prefixes[i]);
+        CHECK(strstr(text, expected) != NULL, "CSV escapes formula prefixes as literal hex text");
+        out = tmpfile();
+        CHECK(out != NULL, "open JSON report");
+        rdt_write_report(out, &report, "json", 0, 0, 0U);
+        rewind(out);
+        read_count = fread(text, 1U, sizeof(text) - 1U, out);
+        text[read_count] = '\0';
+        fclose(out);
+        (void)snprintf(expected, sizeof(expected), "\"name\":\"%cxample.com\"", prefixes[i]);
+        CHECK(strstr(text, expected) != NULL, "JSON preserves the decoded DNS name");
+        rdt_report_free(&report);
+    }
+    return 1;
+}
+
 static int test_truncated_capture(void) {
     FILE *file = fopen("rdt-test-bad.pcap", "wb");
     rdt_report report;
@@ -301,7 +344,7 @@ static int test_truncated_capture(void) {
 int main(void) {
     if (!test_classic_and_outputs() || !test_pcapng() ||
         !test_ipv6_and_malformed_dns() || !test_parallel_transaction_correlation() ||
-        !test_truncated_capture()) return 1;
+        !test_csv_formula_names() || !test_truncated_capture()) return 1;
     (void)printf("Rudy DNS Trace: %u checks passed\n", checks);
     return 0;
 }
