@@ -236,11 +236,20 @@ static void format_address(const uint8_t *bytes, int version, char *out, size_t 
     }
 }
 
-static int transaction_key_equal(const rdt_transaction *tx, const char *client,
-                                 const char *resolver, const rdt_dns_message *dns) {
+typedef struct {
+    const char *client;
+    const char *resolver;
+    uint16_t client_port;
+    uint16_t resolver_port;
+    int tcp;
+} rdt_flow;
+
+static int transaction_key_equal(const rdt_transaction *tx, const rdt_flow *flow,
+                                 const rdt_dns_message *dns) {
     char qtype[24];
-    if (tx->id != dns->id || strcmp(tx->client, client) != 0 ||
-        strcmp(tx->resolver, resolver) != 0) return 0;
+    if (tx->id != dns->id || strcmp(tx->client, flow->client) != 0 ||
+        strcmp(tx->resolver, flow->resolver) != 0 || tx->client_port != flow->client_port ||
+        tx->resolver_port != flow->resolver_port || tx->tcp != flow->tcp) return 0;
     if (!dns->has_question) return 1;
     return strcmp(tx->qname, dns->name) == 0 &&
            strcmp(tx->qtype, type_name(dns->qtype, qtype, sizeof(qtype))) == 0;
@@ -256,7 +265,8 @@ static uint64_t hash_string(uint64_t hash, const char *text) {
 }
 
 static size_t transaction_hash(const char *client, const char *resolver,
-                               const char *qname, const char *qtype, uint16_t id) {
+                               const char *qname, const char *qtype, uint16_t id,
+                               uint16_t client_port, uint16_t resolver_port, int tcp) {
     uint64_t hash = UINT64_C(14695981039346656037);
     hash = hash_string(hash, client);
     hash = hash_string(hash, resolver);
@@ -264,6 +274,9 @@ static size_t transaction_hash(const char *client, const char *resolver,
     hash = hash_string(hash, qtype);
     hash = (hash ^ (uint64_t)(id & 0xffU)) * UINT64_C(1099511628211);
     hash = (hash ^ (uint64_t)(id >> 8U)) * UINT64_C(1099511628211);
+    hash = (hash ^ (uint64_t)client_port) * UINT64_C(1099511628211);
+    hash = (hash ^ (uint64_t)resolver_port) * UINT64_C(1099511628211);
+    hash = (hash ^ (uint64_t)tcp) * UINT64_C(1099511628211);
     return (size_t)hash;
 }
 
@@ -276,8 +289,7 @@ static int ensure_active_table(rdt_report *report) {
     return 1;
 }
 
-static rdt_transaction *find_active_transaction(rdt_report *report, const char *client,
-                                                 const char *resolver,
+static rdt_transaction *find_active_transaction(rdt_report *report, const rdt_flow *flow,
                                                  const rdt_dns_message *dns,
                                                  size_t *index_out) {
     size_t i;
@@ -285,7 +297,7 @@ static rdt_transaction *find_active_transaction(rdt_report *report, const char *
         if (dns->is_response) {
             for (i = 0U; i < report->transaction_count; ++i) {
                 rdt_transaction *tx = &report->transactions[i];
-                if (!tx->has_response && transaction_key_equal(tx, client, resolver, dns)) {
+                if (!tx->has_response && transaction_key_equal(tx, flow, dns)) {
                     if (index_out != NULL) *index_out = i;
                     return tx;
                 }
@@ -294,7 +306,7 @@ static rdt_transaction *find_active_transaction(rdt_report *report, const char *
             for (i = report->transaction_count; i > 0U; --i) {
                 size_t index = i - 1U;
                 rdt_transaction *tx = &report->transactions[index];
-                if (!tx->has_response && transaction_key_equal(tx, client, resolver, dns)) {
+                if (!tx->has_response && transaction_key_equal(tx, flow, dns)) {
                     if (index_out != NULL) *index_out = index;
                     return tx;
                 }
@@ -306,7 +318,8 @@ static rdt_transaction *find_active_transaction(rdt_report *report, const char *
         char qtype[24];
         const char *qtype_name = type_name(dns->qtype, qtype, sizeof(qtype));
         size_t mask = report->active_transaction_capacity - 1U;
-        size_t slot = transaction_hash(client, resolver, dns->name, qtype_name, dns->id) & mask;
+        size_t slot = transaction_hash(flow->client, flow->resolver, dns->name, qtype_name, dns->id,
+                                       flow->client_port, flow->resolver_port, flow->tcp) & mask;
         size_t checked;
         for (checked = 0U; checked < report->active_transaction_capacity; ++checked) {
             size_t entry = report->active_transaction_slots[slot];
@@ -314,7 +327,7 @@ static rdt_transaction *find_active_transaction(rdt_report *report, const char *
             if (entry != RDT_ACTIVE_SLOT_TOMBSTONE) {
                 size_t index = entry - 1U;
                 rdt_transaction *tx = &report->transactions[index];
-                if (!tx->has_response && transaction_key_equal(tx, client, resolver, dns)) {
+                if (!tx->has_response && transaction_key_equal(tx, flow, dns)) {
                     if (index_out != NULL) *index_out = index;
                     return tx;
                 }
@@ -328,7 +341,8 @@ static rdt_transaction *find_active_transaction(rdt_report *report, const char *
 static int insert_active_transaction(rdt_report *report, size_t index) {
     const rdt_transaction *tx = &report->transactions[index];
     size_t mask = report->active_transaction_capacity - 1U;
-    size_t slot = transaction_hash(tx->client, tx->resolver, tx->qname, tx->qtype, tx->id) & mask;
+    size_t slot = transaction_hash(tx->client, tx->resolver, tx->qname, tx->qtype, tx->id,
+                                   tx->client_port, tx->resolver_port, tx->tcp) & mask;
     size_t first_tombstone = SIZE_MAX;
     size_t checked;
     for (checked = 0U; checked < report->active_transaction_capacity; ++checked) {
@@ -354,7 +368,8 @@ static void remove_active_transaction(rdt_report *report, size_t index) {
     size_t checked;
     if (report->active_transaction_slots == NULL) return;
     mask = report->active_transaction_capacity - 1U;
-    slot = transaction_hash(tx->client, tx->resolver, tx->qname, tx->qtype, tx->id) & mask;
+    slot = transaction_hash(tx->client, tx->resolver, tx->qname, tx->qtype, tx->id,
+                            tx->client_port, tx->resolver_port, tx->tcp) & mask;
     for (checked = 0U; checked < report->active_transaction_capacity; ++checked) {
         size_t entry = report->active_transaction_slots[slot];
         if (entry == 0U) return;
@@ -385,10 +400,15 @@ static rdt_transaction *append_transaction(rdt_report *report) {
 
 static void record_dns(rdt_report *report, const rdt_dns_message *dns,
                        const char *source, const char *destination, uint16_t source_port,
-                       double timestamp, char *error,
+                       uint16_t destination_port, int tcp, double timestamp, char *error,
                        size_t error_size) {
-    const char *client = source_port == 53U ? destination : source;
-    const char *resolver = source_port == 53U ? source : destination;
+    const rdt_flow flow = {
+        dns->is_response ? destination : source,
+        dns->is_response ? source : destination,
+        dns->is_response ? destination_port : source_port,
+        dns->is_response ? source_port : destination_port,
+        tcp
+    };
     char qtype_buffer[24];
     const char *qtype = type_name(dns->qtype, qtype_buffer, sizeof(qtype_buffer));
     ++report->dns_messages;
@@ -396,7 +416,7 @@ static void record_dns(rdt_report *report, const rdt_dns_message *dns,
         rdt_transaction *tx = NULL;
         size_t tx_index = 0U;
         ++report->queries;
-        tx = find_active_transaction(report, client, resolver, dns, &tx_index);
+        tx = find_active_transaction(report, &flow, dns, &tx_index);
         if (tx != NULL) {
             ++tx->query_count;
             ++report->retransmissions;
@@ -412,8 +432,11 @@ static void record_dns(rdt_report *report, const rdt_dns_message *dns,
                       (unsigned)RDT_MAX_TRANSACTIONS);
             return;
         }
-        (void)snprintf(tx->client, sizeof(tx->client), "%s", client);
-        (void)snprintf(tx->resolver, sizeof(tx->resolver), "%s", resolver);
+        (void)snprintf(tx->client, sizeof(tx->client), "%s", flow.client);
+        (void)snprintf(tx->resolver, sizeof(tx->resolver), "%s", flow.resolver);
+        tx->client_port = flow.client_port;
+        tx->resolver_port = flow.resolver_port;
+        tx->tcp = flow.tcp;
         (void)snprintf(tx->qname, sizeof(tx->qname), "%s", dns->has_question ? dns->name : "<no-question>");
         (void)snprintf(tx->qtype, sizeof(tx->qtype), "%s", dns->has_question ? qtype : "-");
         tx->id = dns->id;
@@ -427,7 +450,7 @@ static void record_dns(rdt_report *report, const rdt_dns_message *dns,
     ++report->responses;
     {
         size_t tx_index = 0U;
-        rdt_transaction *tx = find_active_transaction(report, client, resolver, dns, &tx_index);
+        rdt_transaction *tx = find_active_transaction(report, &flow, dns, &tx_index);
         if (tx != NULL) {
             tx->has_response = 1;
             tx->response_time = timestamp;
@@ -463,7 +486,7 @@ static int parse_dns_packet(rdt_report *report, const uint8_t *payload, size_t l
         ++report->malformed_dns;
         return 1;
     }
-    record_dns(report, &dns, src, dst, src_port, timestamp, error, error_size);
+    record_dns(report, &dns, src, dst, src_port, dst_port, tcp, timestamp, error, error_size);
     return error == NULL || error[0] == '\0';
 }
 
@@ -947,9 +970,10 @@ static void write_json(FILE *out, const rdt_report *report, int redact_ips,
         fputs(",\"type\":", out); json_string(out, tx->qtype);
         fputs(",\"status\":", out); json_string(out, tx->has_response ? "response" : "unanswered");
         fputs(",\"rcode\":", out); json_string(out, tx->has_response ? rcode_name(tx->rcode) : "-");
-        (void)fprintf(out, ",\"id\":%u,\"queries\":%u,\"answers\":%u,\"latencyMs\":%.3f,\"truncated\":%s}",
+        (void)fprintf(out, ",\"id\":%u,\"queries\":%u,\"answers\":%u,\"latencyMs\":%.3f,\"truncated\":%s,\"clientPort\":%u,\"resolverPort\":%u,\"transport\":\"%s\"}",
                       (unsigned)tx->id, tx->query_count, tx->answer_count, tx->latency_ms,
-                      tx->truncated_response ? "true" : "false");
+                      tx->truncated_response ? "true" : "false", (unsigned)tx->client_port,
+                      (unsigned)tx->resolver_port, tx->tcp ? "tcp" : "udp");
     }
     if (count != 0U) fputc('\n', out);
     fputs("  ],\n", out);
@@ -985,7 +1009,7 @@ static void write_csv(FILE *out, const rdt_report *report, int redact_ips,
                       int redact_names, size_t max_results) {
     size_t i;
     size_t count = result_limit(report, max_results);
-    fputs("client,resolver,name,type,status,rcode,id,queries,answers,latency_ms,truncated\n", out);
+    fputs("client,resolver,name,type,status,rcode,id,queries,answers,latency_ms,truncated,client_port,resolver_port,transport\n", out);
     for (i = 0U; i < count; ++i) {
         const rdt_transaction *tx = &report->transactions[i];
         csv_field(out, redact_ips ? "<redacted>" : tx->client); fputc(',', out);
@@ -994,8 +1018,9 @@ static void write_csv(FILE *out, const rdt_report *report, int redact_ips,
         csv_field(out, tx->qtype); fputc(',', out);
         csv_field(out, tx->has_response ? "response" : "unanswered"); fputc(',', out);
         csv_field(out, tx->has_response ? rcode_name(tx->rcode) : "-");
-        (void)fprintf(out, ",%u,%u,%u,%.3f,%s\n", (unsigned)tx->id, tx->query_count,
-                      tx->answer_count, tx->latency_ms, tx->truncated_response ? "true" : "false");
+        (void)fprintf(out, ",%u,%u,%u,%.3f,%s,%u,%u,%s\n", (unsigned)tx->id, tx->query_count,
+                      tx->answer_count, tx->latency_ms, tx->truncated_response ? "true" : "false",
+                      (unsigned)tx->client_port, (unsigned)tx->resolver_port, tx->tcp ? "tcp" : "udp");
     }
 }
 

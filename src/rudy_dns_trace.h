@@ -14,6 +14,9 @@ typedef struct {
     char resolver[RDT_ADDRESS_MAX];
     char qname[RDT_NAME_MAX];
     char qtype[24];
+    uint16_t client_port;
+    uint16_t resolver_port;
+    int tcp;
     uint16_t id;
     uint32_t query_count;
     uint32_t answer_count;

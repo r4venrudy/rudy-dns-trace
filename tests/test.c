@@ -280,6 +280,57 @@ static int test_parallel_transaction_correlation(void) {
     return 1;
 }
 
+static int test_flow_correlation(void) {
+    uint8_t storage[6][512], dns[128];
+    const uint8_t *packets[6];
+    size_t lengths[6], i;
+    uint32_t seconds[6] = {1U, 1U, 1U, 1U, 1U, 1U};
+    uint32_t fractions[6] = {0U, 1000U, 2000U, 10000U, 21000U, 32000U};
+    rdt_report report;
+    char error[256] = {0};
+    for (i = 0U; i < 6U; ++i) {
+        int response = i >= 3U;
+        size_t flow = i % 3U;
+        uint16_t port = flow == 1U ? 53U : 53000U;
+        size_t n = make_dns(dns, response, response, 0);
+        lengths[i] = make_ipv4_frame(storage[i], dns, n, response, 0);
+        storage[i][response ? 36 : 34] = (uint8_t)(port >> 8U);
+        storage[i][response ? 37 : 35] = (uint8_t)port;
+        if (flow == 2U) {
+            /* Same addresses, ports, DNS ID and question over TCP instead. */
+            memmove(storage[i] + 56U, storage[i] + 42U, n);
+            memset(storage[i] + 38U, 0, 18U);
+            storage[i][23] = 6U;
+            storage[i][46] = 0x50U;
+            storage[i][54] = (uint8_t)(n >> 8U);
+            storage[i][55] = (uint8_t)n;
+            lengths[i] += 14U;
+            storage[i][16] = (uint8_t)((lengths[i] - 14U) >> 8U);
+            storage[i][17] = (uint8_t)(lengths[i] - 14U);
+        }
+        packets[i] = storage[i];
+    }
+    CHECK(write_classic("rdt-test-flows.pcap", 1U, packets, lengths, seconds, fractions, 6U),
+          "write simultaneous DNS socket flows");
+    rdt_report_init(&report);
+    CHECK(rdt_analyze_file("rdt-test-flows.pcap", &report, error, sizeof(error)), error);
+    CHECK(report.transaction_count == 3U && report.retransmissions == 0U,
+          "different ports and transports are separate DNS transactions");
+    CHECK(report.unmatched_responses == 0U, "all socket flows match their replies");
+    for (i = 0U; i < 3U; ++i) {
+        CHECK(report.transactions[i].has_response, "each socket flow receives a response");
+        CHECK(strcmp(report.transactions[i].client, "192.0.2.10") == 0,
+              "the DNS response flag determines client direction even for source port 53");
+        CHECK(report.transactions[i].client_port == (i == 1U ? 53U : 53000U) &&
+              report.transactions[i].resolver_port == 53U && report.transactions[i].tcp == (i == 2U),
+              "the report retains socket ports and transport");
+        CHECK(fabs(report.transactions[i].latency_ms - (10.0 + 10.0 * (double)i)) < 0.01,
+              "latency belongs to the matching socket flow");
+    }
+    rdt_report_free(&report);
+    return 1;
+}
+
 static int test_csv_formula_names(void) {
     const char prefixes[] = "=+-@";
     size_t i;
@@ -344,7 +395,7 @@ static int test_truncated_capture(void) {
 int main(void) {
     if (!test_classic_and_outputs() || !test_pcapng() ||
         !test_ipv6_and_malformed_dns() || !test_parallel_transaction_correlation() ||
-        !test_csv_formula_names() || !test_truncated_capture()) return 1;
+        !test_flow_correlation() || !test_csv_formula_names() || !test_truncated_capture()) return 1;
     (void)printf("Rudy DNS Trace: %u checks passed\n", checks);
     return 0;
 }
