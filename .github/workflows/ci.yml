@@ -12,6 +12,7 @@ permissions:
 jobs:
   build:
     name: ${{ matrix.os }} / C11
+    timeout-minutes: 30
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,6 +29,7 @@ jobs:
 
   sanitizers:
     name: Ubuntu / AddressSanitizer and UndefinedBehaviorSanitizer
+    timeout-minutes: 30
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
